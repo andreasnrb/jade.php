@@ -4,12 +4,15 @@ namespace Jade\Nodes;
 
 class Block extends Node {
     public $isBlock = true;
+    /**
+     * @var Node[]|Block[] array
+     */
     public $nodes = array();
+    public $includeBlock;
+    public $yield;
 
     public function __construct($node=null) {
-        if (null !== $node) {
-            $this->push($node);
-        }
+        if ($node) $this->push($node);
     }
 
     public function replace($other) {
@@ -30,24 +33,13 @@ class Block extends Node {
 
     public function includeBlock() {
         $ret = $this;
+
         foreach ($this->nodes as $node) {
-            if (isset($node->yield)) {
-                return $node;
-            }
-
-            if (isset($node->textOnly)) {
-                continue;
-            }
-
-            if (isset($node->includeBlock)) {
-                $ret = $node->includeBlock();
-            }
-            elseif (isset($node->block) && !$node->block->isEmpty()) {
-                $ret = $node->block->includeBlock();
-            }
-            if (isset($ret->yield)) {
-                return $ret;
-            }
+            if (isset($node->yield)) return $node;
+            elseif (isset($node->textOnly)) continue;
+            elseif (isset($node->includeBlock)) $ret = $node->includeBlock();
+            elseif (isset($node->block) && !$node->block->isEmpty()) $ret = $node->block->includeBlock();
+            if (isset($ret->yield)) return $ret;
         }
 
         return $ret;

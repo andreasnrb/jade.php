@@ -3,11 +3,9 @@
 namespace Jade\Nodes;
 
 class Text extends Node {
-    public $value = '';
+    public $value;
 
     public function __construct($line) {
-        if (is_string($line)) {
-            $this->value = $line;
-        }
+        $this->value = is_string($line) ? $line : '';
     }
 }

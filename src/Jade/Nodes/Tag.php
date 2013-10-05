@@ -2,8 +2,14 @@
 
 namespace Jade\Nodes;
 
-$inline_tags = array(
-    'a'
+
+class Tag extends Attributes {
+    public $name;
+    public $attributes;
+    public $block;
+    public $selfClosing = false;
+    public $inline_tags = array(
+     'a'
     ,'abbr'
     ,'acronym'
     ,'b'
@@ -22,34 +28,32 @@ $inline_tags = array(
     ,'strong'
     ,'sub'
     ,'sup'
-);
-
-class Tag extends Attributes {
-    public $name;
-    public $attributes;
-    public $block;
-    public $selfClosing = false;
-
+    );
     public function __construct($name, $block=null) {
-        $this->name = $name;
-
-        if ($block !== null) {
-            $this->block = $block;
-        }else{
-            $this->block = new Block();
-        }
-
+        $this->name = strtolower($name);
+        $this->block = $block ? $block : new Block();
         $this->attributes = array();
     }
 
     public function isInline() {
-        return in_array($this->name, $inline_tags);
+        return in_array($this->name, $this->inline_tags);
     }
 
+    /**
+     * Check if this tag's contents can be inlined.  Used for pretty printing.
+     * @return bool
+     */
     public function canInline() {
+        /**
+         * @var Node[]|Tag[] $nodes
+         */
         $nodes = $this->block->nodes;
 
-        $isInline = function($node) use (&$isInline) {
+        /**
+         * @param Node|Tag $node
+         * @return array|bool
+         */
+        $isInline = function($node)  use (&$isInline) {
             if ($node->isBlock) {
                 foreach ($node->nodes as $n) {
                     if (!$isInline($n)) {
@@ -58,25 +62,12 @@ class Tag extends Attributes {
                 }
                 return true;
             }
-
-            if ($node->isText) {
-                return true;
-            }
-
-            if (isset($node->isInline) && $node->isInline()) {
-                return true;
-            }
-
-            return false;
+            return $node->isText || (isset($node->isInline) && $node->isInline());
         };
 
-        if (count($nodes) == 0) {
-            return true;
-        }
+        if (count($nodes) == 0) return true;
 
-        if (count($nodes) == 1) {
-            return $isInline($nodes[0]);
-        }
+        if (count($nodes) == 1) return $isInline($nodes[0]);
 
         $ret = true;
         foreach ($nodes as $n) {

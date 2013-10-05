@@ -316,7 +316,41 @@ class Parser {
 
         return $this->blocks;
     }
+/*
+    var fs = require('fs');
 
+    var path = this.resolvePath(this.expect('include').val.trim(), 'include');
+
+    // non-jade
+    if ('.jade' != path.substr(-5)) {
+      var str = fs.readFileSync(path, 'utf8').replace(/\r/g, '');
+      var ext = extname(path).slice(1);
+      if (filters.exists(ext)) str = filters(ext, str, { filename: path });
+      return new nodes.Literal(str);
+    }
+
+    var str = fs.readFileSync(path, 'utf8');
+    var parser = new this.constructor(str, path, this.options);
+    parser.blocks = utils.merge({}, this.blocks);
+
+    parser.mixins = this.mixins;
+
+    this.context(parser);
+    var ast = parser.parse();
+    this.context();
+    ast.filename = path;
+
+    if ('indent' == this.peek().type) {
+      ast.includeBlock().push(this.block());
+    }
+
+    return ast;
+ */
+
+    /**
+     * @return Nodes\Block|Nodes\Literal
+     * @throws Exceptions\JadeFileNotFound
+     */
     protected function parseInclude() {
         $token = $this->expect('include');
         $file = trim($token->value);
@@ -356,6 +390,7 @@ class Parser {
         if ('indent' == $this->peek()->type) {
             // includeBlock might not be set
             $block = $ast->includeBlock();
+            $block->includeBlock = true;
             if (is_object($block)) {
                 $block->push($this->block());
             }

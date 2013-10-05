@@ -6,6 +6,7 @@ use Jade\Filter;
 
 class Compiler {
 
+    public $afterWord;
     protected $xml;
     protected $parentIndents;
 
@@ -676,8 +677,7 @@ class Compiler {
     }
 
     protected function visitBlock(Nodes\Block $block) {
-        foreach ($block->nodes as $k => $n) {
-            $this->visit($n);
+        foreach ($block->nodes as $k => $n) {$this->visit($n);
         }
     }
 

@@ -78,7 +78,7 @@ class Lexer {
     /**
      * Defer token.
      *
-     * @param   Object   $token  token to defer
+     * @param \stdClass $token token to defer
      */
     public function defer(\stdClass $token) {
         $this->deferred[] = $token;
@@ -94,9 +94,7 @@ class Lexer {
     public function lookahead($number = 1) {
         $fetch = $number - count($this->stash);
 
-        while ( $fetch-- > 0 ) {
-            $this->stash[] = $this->next();
-        }
+        while ( $fetch-- > 0 ) $this->stash[] = $this->next();
 
         return $this->stash[--$number];
     }

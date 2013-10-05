@@ -5,6 +5,7 @@ namespace Jade\Tests;
  * Class Yield test
  * @package Jade\Tests
  */
+include_once('TestBase.php');
 class YieldTest extends TestBase {
     public function testYield_Before_Conditional_Head() {
         $verification = $this->verification(__FUNCTION__);
