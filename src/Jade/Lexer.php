@@ -94,9 +94,29 @@ class Lexer {
     public function lookahead($number = 1) {
         $fetch = $number - count($this->stash);
 
-        while ( $fetch-- > 0 ) $this->stash[] = $this->next();
+        while ( $fetch-- > 0 )
+            $this->stash[] = $this->next();
 
         return $this->stash[--$number];
+    }
+
+    /**
+     * Return the indexOf `(` or `{` or `[` / `)` or `}` or `]` delimiters.
+     *
+     * @param int $skip
+     * @return null|\stdClass
+     * @throws \Exception
+     */
+    public function bracketExpression($skip=0) {
+        $start = $this->input[$skip];
+        if ($start != '(' && $start != '{' && $start != '[') throw new \Exception('unrecognized start character');
+        $end = array('(' => ')', '{' =>  '}', '['  =>  ']');//[$start];
+        $range = CharacterParser::parseMax($this->input, $skip + 1);
+        if (is_null($range))  throw new \Exception('source does not have an end character bar starts with ' . $start);
+
+        if ($this->input[$range->end] != $end[$start]) throw new \Exception('start character ' . $start . ' does not match end character ' . $this->input[$range->end]);
+
+        return $range;
     }
 
     /**
