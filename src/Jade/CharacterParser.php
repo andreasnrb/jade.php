@@ -12,11 +12,9 @@ namespace Jade;
 class CharacterParser {
 
     public static function parseMax($input, $start) {
-        $paran = 0;
-        $brackets = 0;
-        $curly = 0;
-        $string = substr($input, $start);
-        $size = sizeof($string);
+        $paran = $brackets = $curly = 0;
+        $string = mb_substr($input, $start);
+        $size = mb_strlen($string);
         for($charPos =0; $charPos < $size; $charPos++) {
             switch($string[$charPos]) {
                 case '(':
@@ -43,7 +41,7 @@ class CharacterParser {
                 $obj = new \stdClass();
                 $obj->start = $start;
                 $obj->end = $charPos;
-                $obj->src = $string;
+                $obj->src = mb_substr($string, 0, $charPos);
                 return $obj;
             }
         }

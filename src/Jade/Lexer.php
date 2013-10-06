@@ -9,7 +9,8 @@ class Lexer {
     public $input;
 
     protected $deferred		= array();
-    protected $indentStack	= 0;
+
+    protected $indentStack	= array();
     protected $stash		= array();
 
     public function __construct($input) {
@@ -38,7 +39,7 @@ class Lexer {
      * @return  Object          new token object
      */
     public function token($type, $value = null) {
-        return (Object) array(
+        return (object) array(
             'type'  => $type
             , 'line'  => $this->lineno
             , 'value' => $value
@@ -55,7 +56,8 @@ class Lexer {
      * @param   string $bytes utf8 string of input to consume
      */
     protected function consume($bytes) {
-        $this->input = mb_substr($this->input, mb_strlen($bytes));
+        $len = is_int($bytes) ? $bytes : mb_strlen($bytes);
+        $this->input = mb_substr($this->input, $len);
     }
 
     protected function normalizeCode($code) {
@@ -164,26 +166,19 @@ class Lexer {
      * @return  Object|null
      */
     protected function scanEOS() {
-        if (!$this->length()) {
-
-            if (count($this->indentStack)) {
-                array_shift($this->indentStack);
-                return $this->token('outdent');
-            }
-            return $this->token('eos');
+        if ($this->length()) return null;
+        if (count($this->indentStack)) {
+            array_shift($this->indentStack);
+            return $this->token('outdent');
         }
+        return $this->token('eos');
     }
 
     protected function scanBlank() {
-
         if( preg_match('/^\n *\n/', $this->input, $matches) ){
             $this->consume(mb_substr($matches[0],0,-1)); // do not cosume the last \r
             $this->lineno++;
-
-            if ($this->pipeless) {
-                return $this->token('text','');
-            }
-
+            if ($this->pipeless) return $this->token('text','');
             return $this->next();
         }
     }
@@ -205,7 +200,12 @@ class Lexer {
     }
 
     protected function scanInterpolation() {
-        return $this->scan('/^#{(.*?)}/', 'interpolation');
+        if (preg_match('/^#{(.*?)}/', $this->input)) {
+            $match = null;
+            $match = $this->bracketExpression(1);
+            $this->consume($match->end + 1);
+            return $this->token('interpelation', $match->src);
+        }
     }
 
     protected function scanTag() {
@@ -225,7 +225,7 @@ class Lexer {
                 $token = $this->token('tag', $name);
             }
 
-            $token->selfClosing = ($matches[2] == '/') ? true: false;
+            $token->selfClosing = $matches[2] == '/';
 
             return $token;
         }
@@ -264,7 +264,16 @@ class Lexer {
     }
 
     protected function scanText() {
-        return $this->scan('/^(?:\| ?| ?)?([^\n]+)/','text');
+        if (preg_match('/^([^\.\<][^\n]+)/',$this->input)
+            && !preg_match('/^(?:\| ?| )([^\n]+)/', $this->input)) {
+            throw new \Exception('Warning: missing space before text for line ' . $this->lineno . ' of jade file.');
+        }
+        $scanned =  $this->scan('/^(?:\| ?| )([^\n]+)/', 'text') or $scanned = $this->scan('/^([^\.][^\n]+)/', 'text');
+        return $scanned;
+    }
+
+    protected function scanDot() {
+        return $this->scan('/^\./', 'dot');
     }
 
     protected function scanExtends() {
@@ -272,7 +281,6 @@ class Lexer {
     }
 
     protected function scanPrepend() {
-
         if ( preg_match('/^prepend +([^\n]+)/', $this->input, $matches) ) {
             $this->consume($matches[0]);
             $token = $this->token('block', $matches[1]);
@@ -292,12 +300,21 @@ class Lexer {
     }
 
     protected function scanBlock() {
-
-        if( preg_match("/^block\b *(?:(prepend|append) +)?([^\n]*)/", $this->input, $matches) ) {
+        if( preg_match("/^block\b *(?:(prepend|append) +)?([^\n]+)/", $this->input, $matches) ) {
             $this->consume($matches[0]);
             $token = $this->token('block', $matches[2]);
             $token->mode = (mb_strlen($matches[1]) == 0) ? 'replace' : $matches[1];
             return $token;
+        }
+    }
+
+    /**
+     * Mixin Block.
+     */
+    protected function scanMixinBlock() {
+        if (preg_match('/^block\s*\n/', $this->input, $matches)) {
+            $this->consume(mb_strlen($matches[0]) - 1);
+            return $this->token('mixin-block');
         }
     }
 
@@ -324,7 +341,13 @@ class Lexer {
     protected function scanAssignment() {
         if ( preg_match('/^(\w+) += *(\'[^\']+\'|"[^"]+"|[^;\n]+)( *;? *)/', $this->input, $matches) ) {
             $this->consume($matches[0]);
-            return $this->token('code', $matches[1] . ' = ' . $matches[2]);
+            $name = $matches[1];
+            $val = trim($matches[2]);
+            if ($val[($len = mb_strlen($val)) - 1] === ';') {
+                $val = mb_substr($val, 0, $len - 1);
+            }
+            $this->assertExpression($val);
+            return $this->token('code', $name . ' = ' . $val);
         }
     }
 
@@ -335,16 +358,18 @@ class Lexer {
 
             # check for arguments
             if ( preg_match( '/^ *\((.*?)\)/', $this->input, $matches_arguments) ) {
-                $this->consume($matches_arguments[0]);
-                $token->arguments = $matches_arguments[1];
+                $range = $this->bracketExpression(mb_strlen($matches_arguments[0]));
+                if (0 == preg_match('-/^ *[-\w]+ *=/', $range->src)) {
+                    $this->consume($range->end + 1);
+                    $token->arguments = $range->src;
+                }
             }
-
             return $token;
         }
     }
 
     protected function scanMixin() {
-        if ( preg_match('/^mixin +([-\w]+)(?: *\((.*)\))?/', $this->input, $matches) ) {
+        if ( preg_match('/^mixin +([-\w]+)(?: *\((.*)\))? */', $this->input, $matches) ) {
             $this->consume($matches[0]);
             $token = $this->token('mixin', $matches[1]);
             $token->arguments = isset($matches[2]) ? $matches[2] : null;
@@ -355,19 +380,38 @@ class Lexer {
     protected function scanConditional() {
         if ( preg_match('/^(if|unless|else if|else)\b([^\n]*)/', $this->input, $matches) ) {
             $this->consume($matches[0]);
+            $type = $matches[1];
+            $code = $matches[2];
 
-            /*switch ($matches[1]) {
-                case 'if': $code = 'if (' . $matches[2] . '):'; break;
-                case 'unless': $code = 'if (!(' . $matches[2] . ')):'; break;
-                case 'else if': $code = 'elseif (' . $matches[2] . '):'; break;
-                case 'else': $code = 'else (' . $matches[2] . '):'; break;
-            }*/
-            $code   = $this->normalizeCode($matches[0]);
+            switch ($type) {
+                case 'if':
+                    $this->assertExpression($code);
+                    $code = 'if (' . $code . '):';
+                    break;
+                case 'unless':
+                    $this->assertExpression($code);
+                    $code = 'if (!(' . $code . ')):';
+                    break;
+                case 'else if':
+                    $this->assertExpression($code);
+                    $code = 'elseif (' . $code . '):';
+                    break;
+                case 'else':
+                    if ($code && trim($code)) {
+                        throw new \Exception('`else` cannot have a condition, perhaps you meant `else if`');
+                    }
+                    $this->assertExpression($code);
+                    $code = 'else:';
+                    break;
+            }
+
+            $code   = $this->normalizeCode($code);
             $token  = $this->token('code', $code);
             $token->buffer = false;
             return $token;
         }
     }
+
 
     protected function scanWhile() {
         if ( preg_match('/^while +([^\n]+)/', $this->input, $matches) ) {
@@ -377,12 +421,11 @@ class Lexer {
     }
 
     protected function scanEach() {
-        if ( preg_match('/^(?:- *)?(?:each|for) +([a-zA-Z_$][\w$]*)(?: *, *([a-zA-Z_$][\w$]*))? +in *([^\n]+)/', $this->input, $matches) ) {
-
+        if ( preg_match('/^(?:- *)?(?:each|for) +([a-zA-Z_$][\w$]*)(?: *, *([a-zA-Z_$][\w$]*))? * in *([^\n]+)/', $this->input, $matches) ) {
             $this->consume($matches[0]);
-
             $token = $this->token('each', $matches[1]);
             $token->key = $matches[2];
+            $this->assertExpression($matches[3]);
             $token->code = $this->normalizeCode($matches[3]);
 
             return $token;
@@ -674,6 +717,7 @@ class Lexer {
             or $r = $this->scanAppend()
             or $r = $this->scanPrepend()
             or $r = $this->scanBlock()
+            or $r = $this->scanMixinBlock()
             or $r = $this->scanInclude()
             or $r = $this->scanMixin()
             or $r = $this->scanCall()
@@ -706,5 +750,9 @@ class Lexer {
      */
     public function getAdvancedToken() {
         return $this->avance();
+    }
+
+    private function assertExpression($val) {
+        //TODO: Add assertion functionality
     }
 }
