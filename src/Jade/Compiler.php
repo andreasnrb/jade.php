@@ -510,7 +510,6 @@ class Compiler {
         foreach ($arguments as $arg) {
             $args = is_array($arg) ? $arg : (array) $arg;
             $count = 0;
-
             foreach ($args as $arg2) {
                 $args2 = explode(',', $arg2);
                 $implode = false;
@@ -519,7 +518,7 @@ class Compiler {
                 $args2 = array_map('trim', $args2);
                 $cmds = array();
                 foreach ($args2 as $argP) {
-                    $argP = trim($argP,"()");
+                    $argP = preg_replace('/\(([\w\.]+)\)/', '$1', $argP);
                     // shortcut for constants
                     if ($this->isConstant($argP)) {
                         if($argP === 'undefined')
@@ -1080,6 +1079,7 @@ class Compiler {
     }
 
     private function generateForInterpolated($str) {
+        $str = preg_replace('/[\"\ \,]+\(([\w\.]+)\)[\"\ \,]+/', '$1', $str);
         $expression = explode('.', trim($str,'"\''));
         return array('echo is_array(%1$s) ? %1$s[%2$s] : %1$s->%3$s', $expression);
     }

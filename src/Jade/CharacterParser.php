@@ -16,41 +16,21 @@ class CharacterParser {
         return $state;
     }
 
-    public static function parseMax($input, $start = 0) {
-        $paran = $brackets = $curly = 0;
-        $string = mb_substr($input, $start);
-        $size = mb_strlen($string);
-        for ($charPos = 0; $charPos < $size; $charPos++) {
-            switch ($string[$charPos]) {
-                case '(':
-                    $paran++;
-                    break;
-                case ')':
-                    $paran--;
-                    break;
-                case '{':
-                    $curly++;
-                    break;
-                case '}':
-                    $curly--;
-                    break;
-
-                case '[':
-                    $brackets++;
-                    break;
-                case ']':
-                    $brackets--;
-                    break;
+    public function parseMax($src, $start = 0) {
+        $index = $start;
+        $state = $this->defaultState();
+        while ($state->roundDepth >= 0 && $state->curlyDepth >= 0 && $state->squareDepth >= 0) {
+            if ($index >= mb_strlen($src)) {
+                throw new \Exception('The end of the string was reached with no closing bracket found.');
             }
-            if ($paran < 0 || $curly < 0 || $brackets < 0) {
-                $obj = new \stdClass();
-                $obj->start = $start;
-                $obj->end = $charPos+1;
-                $obj->src = mb_substr($string, 0, $charPos);
-                return $obj;
-            }
+            $this->parseChar($src[$index++], $state);
         }
-        return null;
+        $end = $index - 1;
+        $obj = new \stdClass();
+        $obj->start = $start;
+        $obj->end = $end;
+        $obj->src = mb_substr($src, $start, $end);
+        return $obj;
     }
 
     /**
@@ -135,7 +115,6 @@ class CharacterParser {
 
     public static function isPunctuator($c) {
         $code = ord($c[0]);
-
         switch ($code) {
             case 46: // . dot
             case 40: // ( open bracket

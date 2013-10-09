@@ -114,7 +114,7 @@ class Lexer {
         $start = $this->input[$skip];
         if ($start != '(' && $start != '{' && $start != '[') throw new \Exception('unrecognized start character');
         $end = array('(' => ')', '{' =>  '}', '['  =>  ']');
-        $range = CharacterParser::parseMax($this->input, $skip + 1);
+        $range = (new CharacterParser())->parseMax($this->input, $skip + 1);
         if (is_null($range))  throw new \Exception('source does not have an end character bar starts with ' . $start);
         if ($this->input[$range->end] != $end[$start]) throw new \Exception('start character ' . $start .
             ' does not match end character ' . $this->input[$range->end]);
@@ -450,11 +450,11 @@ class Lexer {
 
     protected function scanAttributes() {
         if ($this->input[0] === '(') {
-            $index = $this->bracketExpression()->end+1;
+            $index = $this->bracketExpression()->end;
             $str = mb_substr($this->input, 1, $index-1);
             $equals = '=';
             $this->assertNestingCorrect($str);
-            $this->consume($index+1);
+            $this->consume($index + 1);
             $token = $this->token('attributes');
             $token->attributes = array();
             $token->escaped = array();
@@ -471,19 +471,24 @@ class Lexer {
 
             $isEndOfAttribute = function ($i) use (&$key, &$str, &$loc, &$state, &$val) {
                 if (trim($key) === '') return false;
-                if ($i === mb_strlen($str)) return true;
+                if (($i) === mb_strlen($str)) {
+                    return true;
+                }
                 if ('key' === $loc) {
                     if ($str[$i] === ' ' || $str[$i] === "\n" || $str[$i] === "\r\n") {
                         for ($x = $i; $x < mb_strlen($str); $x++) {
-                            if ($str[$x] === '=' || $str[$x] === '!' || $str[$x] === ',') return false;
-                            else return true;
+                            if ($str[$x] !== ' ' && $str[$x] !== "\n" && $str[$x] !== "\r\n") {
+                                if ($str[$x] === '=' || $str[$x] === '!' || $str[$x] === ',') return false;
+                                else return true;
+                            }
                         }
                     }
                     return $str[$i] === ',';
                 } else if ($loc === 'value' && !$state->isNesting()) {
                     try {
                         $this->assertExpression($val);
-                        if ($str[$i] === ' ' || $str[$i] === "\n" || $str[$i] === "\r\n") {
+                        //TODO: Something wrong here so cant support spaces as attribute separators
+                        /*if ($str[$i] === ' ' || $str[$i] === "\n" || $str[$i] === "\r\n") {
                             for ($x = $i; $x < mb_strlen($str); $x++) {
                                 if ($str[$x] != ' ' && $str[$x] != "\n" && $str[$x] != "\r\n") {
                                     if (CharacterParser::isPunctuator($str[$x]) && $str[$x] != '"' && $str[$x] != "'")
@@ -492,16 +497,17 @@ class Lexer {
                                         return true;
                                 }
                             }
-                        }
+                        }*/
                         return $str[$i] === ',';
                     } catch (\Exception $ex) {
                         return false;
                     }
                 }
+                return false;
             };
 
-            for ($i = 0; $i < mb_strlen($str); $i++) {
-                if ($isEndOfAttribute($i+1)) {
+            for ($i = 0; $i <= mb_strlen($str); $i++) {
+                if ($isEndOfAttribute($i)) {
                     $val = trim($val);
                     if ($val) $this->assertExpression($val);
                     $key = trim($key);
@@ -518,14 +524,14 @@ class Lexer {
                         case 'key-char':
                             if ($str[$i] === $quote) {
                                 $loc = 'key';
-                                if ($i + 1 < mb_strlen($str) && in_array($str[$i + 1], [' ', ',', '!', $equals, '\n']))
+                                if ($i + 1 < mb_strlen($str) && !in_array($str[$i + 1], [' ', ',', '!', $equals, "\n", "\r\n"]))
                                     throw new \Exception('Unexpected character ' . $str[$i + 1] . ' expected ` `, `\\n`, `,`, `!` or `=`');
                             } else if ($loc === 'key-char') {
                                 $key .= $str[$i];
                             }
                             break;
                         case 'key':
-                            if ($key === '' && ($str[$i] === '"' || $str[$i] === "'")) {
+                            if (empty($key) && ($str[$i] === '"' || $str[$i] === "'")) {
                                 $loc = 'key-char';
                                 $quote = $str[$i];
                             } else if ($str[$i] === '!' || $str[$i] === $equals) {
@@ -564,7 +570,6 @@ class Lexer {
                 $this->consume(1);
                 $token->selfClosing = true;
             }
-
             return $token;
         }
     }
@@ -576,8 +581,8 @@ class Lexer {
             $_ = $_[0];
             if ($escape) return $_;
             try {
-                $range = CharacterParser::parseMax($expr);
-                if ($expr[$range->end-1] !== '}') return mb_substr($_, 0, 2) . $this->interpolate(mb_substr($_, 2), $quote);
+                $range = (new CharacterParser())->parseMax($expr);
+                if ($expr[$range->end] !== '}') return mb_substr($_, 0, 2) . $this->interpolate(mb_substr($_, 2), $quote);
                 self::assertExpression($range->src);
                 return $quote . " , (" . $range->src . ") , " . $quote . $this->interpolate(mb_substr($expr, $range->end + 1), $quote);
             } catch (\Exception $ex) {
@@ -689,7 +694,8 @@ class Lexer {
             or $r = $this->scanIndent()
             or $r = $this->scanComment()
             or $r = $this->scanColon()
-            or $r = $this->scanText();
+            or $r = $this->scanText()
+            or $r = $this->scanDot();
 
         return $r;
     }
@@ -704,11 +710,13 @@ class Lexer {
      * @deprecated Use advance instead
      */
     public function getAdvancedToken() {
-        return $this->avance();
+        return $this->advance();
     }
 
     private static function assertExpression($val) {
-        //TODO: Add assertion functionality
+        if (@eval($val."\n")) {
+            throw new \Exception(sprintf('Not correct expression, expressions need to return true: %s', $val));
+        }
     }
 
     private function assertNestingCorrect($str) {
