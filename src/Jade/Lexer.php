@@ -12,6 +12,7 @@ class Lexer {
 
     protected $indentStack	= array();
     protected $stash		= array();
+    private $colons;
 
     public function __construct($input) {
         $this->setInput($input);
@@ -112,11 +113,11 @@ class Lexer {
     public function bracketExpression($skip=0) {
         $start = $this->input[$skip];
         if ($start != '(' && $start != '{' && $start != '[') throw new \Exception('unrecognized start character');
-        $end = array('(' => ')', '{' =>  '}', '['  =>  ']');//[$start];
+        $end = array('(' => ')', '{' =>  '}', '['  =>  ']');
         $range = CharacterParser::parseMax($this->input, $skip + 1);
         if (is_null($range))  throw new \Exception('source does not have an end character bar starts with ' . $start);
-
-        if ($this->input[$range->end] != $end[$start]) throw new \Exception('start character ' . $start . ' does not match end character ' . $this->input[$range->end]);
+        if ($this->input[$range->end] != $end[$start]) throw new \Exception('start character ' . $start .
+            ' does not match end character ' . $this->input[$range->end]);
 
         return $range;
     }
@@ -200,11 +201,10 @@ class Lexer {
     }
 
     protected function scanInterpolation() {
-        if (preg_match('/^#{(.*?)}/', $this->input)) {
-            $match = null;
+        if (preg_match('/^\#{(.*?)}/', $this->input)) {
             $match = $this->bracketExpression(1);
             $this->consume($match->end + 1);
-            return $this->token('interpelation', $match->src);
+            return $this->token('interpolation', $match->src);
         }
     }
 
@@ -416,6 +416,7 @@ class Lexer {
     protected function scanWhile() {
         if ( preg_match('/^while +([^\n]+)/', $this->input, $matches) ) {
             $this->consume($matches[0]);
+            $this->assertExpression($matches[1]);
             $this->token('code', 'while (' . $matches[1] . '):');
         }
     }
@@ -434,201 +435,155 @@ class Lexer {
 
     protected function scanCode() {
         if ( preg_match('/^(!?=|-)[ \t]*([^\n]+)/', $this->input, $matches) ) {
-
             $this->consume($matches[0]);
             $flags  = $matches[1];
-            $code   = $this->normalizeCode($matches[2]);
+            $matches[1] = $matches[2];
+            $code   = $this->normalizeCode($matches[1]);
 
             $token = $this->token('code', $code);
             $token->escape = $flags[0] === '=';
             $token->buffer = '=' === $flags[0] || (isset($flags[1]) && '=' === $flags[1]);
-
+            if ($token->buffer) $this->assertExpression($matches[1]);
             return $token;
         }
     }
 
     protected function scanAttributes() {
-        if ( $this->input[0] === '(' ) {
-            // cant use ^ anchor in the regex because the pattern is recursive
-            // but this restriction is asserted by the if above
-            preg_match('/\((?:[^()]++|(?R))*+\)/', $this->input, $matches);
-            $this->consume($matches[0]);
-
-            $str = mb_substr($matches[0],1,mb_strlen($matches[0])-2);
-
+        if ($this->input[0] === '(') {
+            $index = $this->bracketExpression()->end+1;
+            $str = mb_substr($this->input, 1, $index-1);
+            $equals = '=';
+            $this->assertNestingCorrect($str);
+            $this->consume($index+1);
             $token = $this->token('attributes');
-            $token->attributes	= array();
-            $token->escaped		= array();
-            $token->selfClosing	= false;
+            $token->attributes = array();
+            $token->escaped = array();
+            $token->selfClosing = false;
 
-            $key	= '';
-            $val	= '';
-            $quote	= '';
-            $states	= array('key');
-            $escapedAttribute	= '';
-            $previousChar		= '';
+            $key = '';
+            $val = '';
+            $quote = '';
+            $escapedAttr = true;
+            $interpolatable = '';
+            $loc = 'key';
+            $characterParser = new CharacterParser();
+            $state = $characterParser->defaultState();
 
-            $state = function() use(&$states) {
-                return $states[count($states)-1];
-            };
-
-            $interpolate = function($attr) use (&$quote) {
-                // the global flag is turned on by default
-                // TODO: check the +, maybe it is better to use . here
-                return str_replace('\\#{', '#{', preg_replace('/(?<!\\\\)#{([^}]+)}/', $quote . ' + $1 + ' . $quote, $attr));
-            };
-
-            $parse = function($char) use (&$key, &$val, &$quote, &$states, &$token, &$escapedAttribute, &$previousChar, $state, $interpolate) {
-                switch ($char) {
-                case ',':
-                case "\n":
-                    switch ($state()) {
-                    case 'expr':
-                    case 'array':
-                    case 'string':
-                    case 'object':
-                        $val = $val . $char;
-                        break;
-
-                    default:
-                        array_push($states, 'key');
-                        $val = trim($val);
-                        $key = trim($key);
-
-                        if (empty($key)) return;
-
-                        $key = preg_replace(
-                            array('/^[\'\"]|[\'\"]$/','/\!/')
-                            ,''
-                            ,$key
-                        );
-                        $token->escaped[$key]	= $escapedAttribute;
-                        $token->attributes[$key]= ('' == $val) ? true : $interpolate($val);
-
-                        $key = '';
-                        $val = '';
-                    }
-                    break;
-
-                    case '=':
-                        switch ($state()) {
-                        case 'key char':
-                            $key = $key . $char;
-                            break;
-
-                        case 'val':
-                        case 'expr':
-                        case 'array':
-                        case 'string':
-                        case 'object':
-                            $val = $val . $char;
-                            break;
-
-                        default:
-                            $escapedAttribute = '!' != $previousChar;
-                            array_push($states,'val');
+            $isEndOfAttribute = function ($i) use (&$key, &$str, &$loc, &$state, &$val) {
+                if (trim($key) === '') return false;
+                if ($i === mb_strlen($str)) return true;
+                if ('key' === $loc) {
+                    if ($str[$i] === ' ' || $str[$i] === "\n" || $str[$i] === "\r\n") {
+                        for ($x = $i; $x < mb_strlen($str); $x++) {
+                            if ($str[$x] === '=' || $str[$x] === '!' || $str[$x] === ',') return false;
+                            else return true;
                         }
-                        break;
-
-                        case '(':
-                            if ($state() == 'val' || $state() == 'expr') {
-                                array_push($states,'expr');
-                            }
-                            $val = $val . $char;
-                            break;
-
-                        case ')':
-                            if ($state() == 'val' || $state() == 'expr') {
-                                array_pop($states);
-                            }
-                            $val = $val . $char;
-                            break;
-
-                        case '{':
-                            if ($state() == 'val') {
-                                array_push($states, 'object');
-                            }
-                            $val = $val . $char;
-                            break;
-
-                        case '}':
-                            if ($state() == 'object') {
-                                array_pop($states);
-                            }
-                            $val = $val . $char;
-                            break;
-
-                        case '[':
-                            if ($state() == 'val') {
-                                array_push($states, 'array');
-                            }
-                            $val = $val . $char;
-                            break;
-
-                        case ']':
-                            if ($state() == 'array') {
-                                array_pop($states);
-                            }
-                            $val = $val . $char;
-                            break;
-
-                        case '"':
-                        case "'":
-                            switch ($state()) {
-                            case 'key':
-                                array_push($states, 'key char');
-                                break;
-
-                            case 'key char':
-                                array_pop($states);
-                                break;
-
-                            case 'string':
-                                if ($char == $quote) {
-                                    array_pop($states);
+                    }
+                    return $str[$i] === ',';
+                } else if ($loc === 'value' && !$state->isNesting()) {
+                    try {
+                        $this->assertExpression($val);
+                        if ($str[$i] === ' ' || $str[$i] === "\n" || $str[$i] === "\r\n") {
+                            for ($x = $i; $x < mb_strlen($str); $x++) {
+                                if ($str[$x] != ' ' && $str[$x] != "\n" && $str[$x] != "\r\n") {
+                                    if (CharacterParser::isPunctuator($str[$x]) && $str[$x] != '"' && $str[$x] != "'")
+                                        return false;
+                                    else
+                                        return true;
                                 }
-                                $val = $val . $char;
-                                break;
-
-                            default:
-                                array_push($states, 'string');
-                                $val = $val . $char;
-                                $quote = $char;
-                                break;
                             }
-                            break;
-
-                            case '':
-                                break;
-
-                            default:
-                                switch ($state()) {
-                                case 'key':
-                                case 'key char':
-                                    $key = $key .$char;
-                                    break;
-
-                                default:
-                                    $val = $val . $char;
-                                    break;
-                                }
+                        }
+                        return $str[$i] === ',';
+                    } catch (\Exception $ex) {
+                        return false;
+                    }
                 }
-                $previousChar = $char;
             };
 
-            for ($i=0;$i<mb_strlen($str);$i++) {
-                $parse(mb_substr($str, $i, 1));
+            for ($i = 0; $i < mb_strlen($str); $i++) {
+                if ($isEndOfAttribute($i+1)) {
+                    $val = trim($val);
+                    if ($val) $this->assertExpression($val);
+                    $key = trim($key);
+                    $key = preg_replace('/^[\'"]|[\'"]$/', '', $key);
+                    $token->escaped[$key] = $escapedAttr;
+                    if (strpos($val, ' , \'') !== false)
+                        $val = substr($val, 0, strpos($val, ' , \''));
+                    $token->attributes[$key] = '' == $val ? true : $val;
+                    $key = $val = '';
+                    $loc = 'key';
+                    $escapedAttr = false;
+                } else {
+                    switch ($loc) {
+                        case 'key-char':
+                            if ($str[$i] === $quote) {
+                                $loc = 'key';
+                                if ($i + 1 < mb_strlen($str) && in_array($str[$i + 1], [' ', ',', '!', $equals, '\n']))
+                                    throw new \Exception('Unexpected character ' . $str[$i + 1] . ' expected ` `, `\\n`, `,`, `!` or `=`');
+                            } else if ($loc === 'key-char') {
+                                $key .= $str[$i];
+                            }
+                            break;
+                        case 'key':
+                            if ($key === '' && ($str[$i] === '"' || $str[$i] === "'")) {
+                                $loc = 'key-char';
+                                $quote = $str[$i];
+                            } else if ($str[$i] === '!' || $str[$i] === $equals) {
+                                $escapedAttr = $str[$i] !== '!';
+                                if ($str[$i] === '!') $i++;
+                                if ($str[$i] !== $equals) throw new \Exception('Unexpected character ' . $str[$i] . ' expected `=`');
+                                $loc = 'value';
+                                $state = $characterParser->defaultState();
+                            } else {
+                                $key .= $str[$i];
+                            }
+
+                            break;
+                        case 'value':
+                            $state = $characterParser->parseChar($str[$i], $state);
+                            if ($state->isString()) {
+                                $loc = 'string';
+                                $quote = $str[$i];
+                                $interpolatable = $str[$i];
+                            } else {
+                                $val .= $str[$i];
+                            }
+                            break;
+                        case 'string':
+                            $state = $characterParser->parseChar($str[$i], $state);
+                            $interpolatable .= $str[$i];
+                            if (!$state->isString()) {
+                                $loc = 'value';
+                                $val .= $this->interpolate($interpolatable, $quote);
+                            }
+                            break;
+                    }
+                }
             }
-
-            $parse(',');
-
-            if ($this->length() && '/' == $this->input[0]) {
+            if (isset($this->input[0]) && '/' == $this->input[0]) {
                 $this->consume(1);
                 $token->selfClosing = true;
             }
 
             return $token;
         }
+    }
+
+    private function interpolate ($attr, $quote) {
+        return str_replace('\#{', '#{', preg_replace_callback ('/(\\\\)?#{(.+)/', function ($_) use (&$quote) {
+            $escape = $_[1];
+            $expr = $_[2];
+            $_ = $_[0];
+            if ($escape) return $_;
+            try {
+                $range = CharacterParser::parseMax($expr);
+                if ($expr[$range->end-1] !== '}') return mb_substr($_, 0, 2) . $this->interpolate(mb_substr($_, 2), $quote);
+                self::assertExpression($range->src);
+                return $quote . " , (" . $range->src . ") , " . $quote . $this->interpolate(mb_substr($expr, $range->end + 1), $quote);
+            } catch (\Exception $ex) {
+                return mb_substr($_, 0, 2) . $this->interpolate(mb_substr($_, 2), $quote);
+            }
+        }, $attr));
     }
 
     protected function scanIndent() {
@@ -752,7 +707,10 @@ class Lexer {
         return $this->avance();
     }
 
-    private function assertExpression($val) {
+    private static function assertExpression($val) {
         //TODO: Add assertion functionality
+    }
+
+    private function assertNestingCorrect($str) {
     }
 }

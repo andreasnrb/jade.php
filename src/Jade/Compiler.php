@@ -160,6 +160,9 @@ class Compiler {
                     $ok = true;
                 }
             }
+        } else {
+            if (preg_match('/["\']?(^[\D]*[a-zA-Z]+)(\.[\D]*[a-zA-Z]+)+["\']?/i', $str))
+                $ok = false;
         }
 
         return $ok;
@@ -497,7 +500,7 @@ class Compiler {
     protected function createStatements() {
 
         if (func_num_args()==0) {
-            throw new Exception();
+            throw new \Exception('createStatements requires arguments');
         }
 
         $arguments = func_get_args();
@@ -505,33 +508,61 @@ class Compiler {
         $variables = array();
 
         foreach ($arguments as $arg) {
+            $args = is_array($arg) ? $arg : (array) $arg;
+            $count = 0;
 
-            // shortcut for constants
-            if ($this->isConstant($arg)) {
-                if($arg === 'undefined')
-                    $arg = 'null';
-                array_push($variables, $arg);
-                continue;
+            foreach ($args as $arg2) {
+                $args2 = explode(',', $arg2);
+                $implode = false;
+                if (sizeof($args2) > 1)
+                    $implode = true;
+                $args2 = array_map('trim', $args2);
+                $cmds = array();
+                foreach ($args2 as $argP) {
+                    $argP = trim($argP,"()");
+                    // shortcut for constants
+                    if ($this->isConstant($argP)) {
+                        if($argP === 'undefined')
+                            $argP = 'null';
+                        array_push($cmds, $argP);
+                        continue;
+                    }
+
+                    // if we have a php variable assume that the string is good php
+                    if (preg_match('/&?\${1,2}[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*/', $argP)) {
+                        array_push($cmds, $argP);
+                        continue;
+                    }
+
+                    if (preg_match('/^([\'"]).*?/', $argP, $match)) {
+                        $code= $this->handleString(trim($argP));
+                    } else {
+                        // TODO: move this to handleCode
+                        $argP = preg_replace('/\bvar\b/','',$argP);
+                        $code = $this->handleCode(trim($argP));
+                    }
+
+                    if ($count>=1) {
+                        $code[0] = "'" . trim($code[0],'$') . "'";
+                        $code2 = $this->handleString(trim($argP));
+                        $code2[0] = mb_substr($code2[0],1);
+                    } else {
+                        $code2 = array();
+                    }
+                    $statements = array_merge($statements, array_slice($code,0,-1));
+                    array_push($cmds, array_pop($code));
+                    if ($code2)
+                        array_push($cmds, array_pop($code2));
+                    $count++;
+                }
+                if ($implode) {
+                    array_push($variables, implode(', ', $cmds));
+                } else {
+                    foreach ($cmds as $cmd)
+                    array_push($variables, $cmd);
+                }
             }
-
-            // if we have a php variable assume that the string is good php
-            if (preg_match('/&?\${1,2}[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*/', $arg)) {
-                array_push($variables, $arg);
-                continue;
-            }
-
-            if (preg_match('/^([\'"]).*?\1/', $arg, $match)) {
-                $code= $this->handleString(trim($arg));
-            } else {
-                // TODO: move this to handleCode
-                $arg = preg_replace('/\bvar\b/','',$arg);
-                $code = $this->handleCode(trim($arg));
-            }
-
-            $statements = array_merge($statements, array_slice($code,0,-1));
-            array_push($variables, array_pop($code));
         }
-
         array_push($statements, $variables);
         return $statements;
     }
@@ -597,7 +628,6 @@ class Compiler {
             $arguments = func_get_args();
             array_shift($arguments); // remove $code
             $statements= $this->apply('createStatements', $arguments);
-
             return $this->createPhpBlock($code, $statements);
         }
 
@@ -1011,12 +1041,15 @@ class Compiler {
                     // inline this in the tag
                     $pp = $this->prettyprint;
                     $this->prettyprint = false;
-
                     if ($key == 'class') {
                         $value = $this->createCode('echo is_array(%1$s) ? implode(" ", %1$s) : %1$s', $value);
                     }
                     elseif (strpos($key, 'data-') !== false) {
-                        $value = $this->createCode('echo is_array(%1$s) ? json_encode(%1$s) : %1$s', $value);
+                        if(strpos($value, '.') !== false) {
+                            list($codeTemplate, $value) = $this->generateForInterpolated($value);
+                            $value = $this->createCode($codeTemplate, $value);
+                        } else
+                            $value = $this->createCode('echo is_array(%1$s) ? json_encode(%1$s) : %1$s', $value);
                     }else{
                         $value = $this->createCode('echo %1$s', $value);
                     }
@@ -1044,5 +1077,10 @@ class Compiler {
         }
 
         $this->buffer(implode(' ', $items), false);
+    }
+
+    private function generateForInterpolated($str) {
+        $expression = explode('.', trim($str,'"\''));
+        return array('echo is_array(%1$s) ? %1$s[%2$s] : %1$s->%3$s', $expression);
     }
 }
