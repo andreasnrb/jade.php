@@ -4,9 +4,10 @@ namespace Jade\Nodes;
 
 class Each extends Node {
     public $obj;
-    public $value;
     public $key;
     public $block;
+    public $alternative;
+    public $val;
 
     /**
      * @param string $obj
@@ -16,7 +17,7 @@ class Each extends Node {
      */
     function __construct($obj, $value, $key, $block=null) {
         $this->obj = $obj;
-        $this->value = $value;
+        $this->val = $value;
         $this->key = $key;
         $this->block = $block;
     }

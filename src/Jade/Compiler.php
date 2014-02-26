@@ -518,7 +518,7 @@ class Compiler {
                 $args2 = array_map('trim', $args2);
                 $cmds = array();
                 foreach ($args2 as $argP) {
-                    $argP = preg_replace('/\(([\w\.]+)\)/', '$1', $argP);
+                    $argP = preg_replace('/[^!]\(([\w\.]+)\)/', '$1', $argP);
                     // shortcut for constants
                     if ($this->isConstant($argP)) {
                         if($argP === 'undefined')
@@ -883,7 +883,7 @@ class Compiler {
     }
 
     protected function visitText(Nodes\Text $text) {
-        $this->buffer($this->interpolate($text->value));
+        $this->buffer($this->interpolate($text->val));
     }
 
     protected function visitComment(Nodes\Comment $comment) {
@@ -891,7 +891,7 @@ class Compiler {
             return;
         }
 
-        $this->buffer('<!--' . $comment->value . '-->');
+        $this->buffer('<!--' . $comment->val . '-->');
     }
 
     protected function visitBlockComment(Nodes\BlockComment $comment) {
@@ -912,7 +912,7 @@ class Compiler {
 
     protected function visitCode(Nodes\Code $node) {
         $block  = !$node->buffer;
-        $code   = trim($node->value);
+        $code   = trim($node->val);
 
         if ($node->buffer) {
 

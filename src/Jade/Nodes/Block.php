@@ -45,4 +45,11 @@ class Block extends Node {
         return $ret;
     }
 
+    /**
+     * @return bool
+     */
+    public function isText() {
+        return false;
+    }
+
 }

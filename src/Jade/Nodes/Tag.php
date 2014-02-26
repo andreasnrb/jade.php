@@ -4,6 +4,7 @@ namespace Jade\Nodes;
 
 
 class Tag extends Attributes {
+    public $buffer;
     public $name;
     public $attributes;
     public $block;
@@ -29,6 +30,8 @@ class Tag extends Attributes {
     ,'sub'
     ,'sup'
     );
+    public $code;
+
     public function __construct($name, $block=null) {
         $this->name = strtolower($name);
         $this->block = $block ? $block : new Block();

@@ -382,7 +382,7 @@ class Lexer {
             $this->consume($matches[0]);
             $type = $matches[1];
             $code = $matches[2];
-
+            $code = trim($code);
             switch ($type) {
                 case 'if':
                     $this->assertExpression($code);

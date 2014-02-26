@@ -3,6 +3,9 @@
 namespace Jade;
 
 class Filter {
+    public $block;
+    public $attrs;
+
     protected static function getTextOfNodes($data) {
         if (is_object($data)) {
             $new_str = '';
