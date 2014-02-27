@@ -292,6 +292,10 @@ class Parser {
         if (isset($this->blocks[$name])) {
             $prev = $this->blocks[$name];
 
+            if(!isset($prev->mode)){
+                $prev->mode = 'replace';
+            }
+
             switch ($prev->mode) {
             case 'append':
                 $block->nodes = array_merge($block->nodes, $prev->nodes);
@@ -314,7 +318,7 @@ class Parser {
             $this->blocks[$name] = $block;
         }
 
-        return $this->blocks;
+        return $this->blocks[$name];
     }
 
     protected function parseInclude() {
