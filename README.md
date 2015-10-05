@@ -30,12 +30,13 @@ $header = "this is append";
 require $jade->cache('index.jade');
 ```
 
-### Run example in this Repository
+### Try out the Example in this Repository
 ```
 git clone https://github.com/JumpLink/jade.php.git
 cd jade.php/example
 php -S localhost:8000
 xdg-open http://localhost:8000/main.php
+xdg-open http://localhost:8000/variables.php
 ```
 
 ## Tests
