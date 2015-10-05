@@ -10,13 +10,24 @@ and mixins.
 ## Syntax
 See [original Jade Docs](https://github.com/visionmedia/jade#readme).
 
-## Example
+## Examples
+
+### Render
 ``` php
-<?php
 namespace Jade;
 require __DIR__ . '/vendor/autoload.php';
 $jade = new Jade('/tmp', true);
 echo $jade->render('index.jade');
+```
+
+### Cache with Variables
+``` php
+namespace Jade;
+require __DIR__ . '/vendor/autoload.php';
+$jade = new Jade('/tmp', true);
+$title = "Hello World";
+$header = "this is append";
+require $jade->cache('index.jade');
 ```
 
 ### Run example in this Repository
