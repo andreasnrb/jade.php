@@ -1,0 +1,20 @@
+include bottom-script.jade
+include css.jade
+doctype
+head
+  //- TODO: Check if it's the good charset
+  meta(charset='utf-8')
+  meta(http-equiv='X-UA-Compatible', content='IE=edge')
+  title 
+  meta(name='description', content='')
+  meta(name='viewport', content='width=device-width,initial-scale=1')
+  //- TODO : Place favicon.ico and apple-touch-icon.png in the root directory
+  block css
+    link(rel='stylesheet', href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css')
+body
+  //- Add your site or application content here
+  block main
+  block bottom-script
+    script(src="//ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js")
+    script(src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js")
+    script(src="//cdnjs.cloudflare.com/ajax/libs/holder/2.3.0/holder.js")

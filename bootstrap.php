@@ -1,3 +1,3 @@
 <?php
-include "src/Tests/TestBase.php";
+include "src/tests/TestBase.php";
 include "vendor/autoload.php";
