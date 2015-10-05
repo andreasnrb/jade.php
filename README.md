@@ -8,7 +8,7 @@ All the features from the original are supported but undertested, including inhe
 and mixins.
 
 ## Syntax
-See [original Jade Docs](https://github.com/visionmedia/jade#readme)
+See [original Jade Docs](https://github.com/visionmedia/jade#readme).
 
 ## Example
 ``` php
@@ -19,8 +19,23 @@ $jade = new Jade('/tmp', true);
 echo $jade->render('index.jade');
 ```
 
-## Tests
+### Run example in this Repository
+```
+git clone https://github.com/JumpLink/jade.php.git
+cd jade.php/example
+php -S localhost:8000
+xdg-open http://localhost:8000/main.php
+```
 
+## Tests
+Note: Tests need to be fixed!
+
+```
+git clone https://github.com/JumpLink/jade.php.git
+cd jade.php
+composer install
+php vendor/bin/phpunit src/tests/EachTest.php
+```
 
 ## Notes
 Please check the git commit history for the authoritative list of contributors.
