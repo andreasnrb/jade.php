@@ -5,7 +5,7 @@
 
     <testsuites>
         <testsuite name="Phaded tests">
-            <directory>./src/Tests</directory>
+            <directory>./src/tests</directory>
         </testsuite>
     </testsuites>
 </phpunit>
