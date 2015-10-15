@@ -37,7 +37,7 @@
 .DS_Store
 .DS_Store?
 ._*
-.*.sw[op]
+.*.sw?
 .Spotlight-V100
 .Trashes
 ehthumbs.db
