@@ -31,7 +31,7 @@ abstract class TestBase extends PHPUnit_Framework_TestCase {
      */
     protected function jadeFile($test_method) {
         $filename = implode('.', explode('_', substr($test_method,4)));
-        return file_get_contents($this->assets . strtolower("/$filename.jade"));
+        return $this->assets . '/' . strtolower($filename) . '.jade';
     }
 
     /**
