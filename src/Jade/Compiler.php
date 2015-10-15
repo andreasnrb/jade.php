@@ -948,15 +948,15 @@ class Compiler
                 if ($this->terse) {
                     $items[] = $key;
                 } else {
-                    $items[] = "{$key}='{$key}'";
+                    $items[] = "{$key}=\"{$key}\"";
                 }
             } elseif ($value !== 'false' && $value !== 'null' && $value !== 'undefined') {
-                $items[] = "{$key}='{$value}'";
+                $items[] = "{$key}=\"{$value}\"";
             }
         }
 
         if (count($classes)) {
-            $items[] = 'class=\'' . implode(' ', $classes) . '\'';
+            $items[] = 'class="' . implode(' ', $classes) . '"';
         }
 
         $this->buffer(implode(' ', $items), false);
