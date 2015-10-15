@@ -13,7 +13,7 @@ abstract class TestBase extends PHPUnit_Framework_TestCase {
     private $assets = '';
     protected function setUp() {
         $this->assets = dirname(__FILE__) . '/assets';
-        $this->jade = new Jade(true);
+        $this->jade = new Jade(null, true);
     }
 
     /**
