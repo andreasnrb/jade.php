@@ -1,2 +1,2 @@
 #!/bin/sh
-phpunit --testsuite 'Jade tests' --process-isolation "$@"
+./vendor/bin/phpunit --testsuite 'Jade tests' --process-isolation "$@"
