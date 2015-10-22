@@ -1,6 +1,7 @@
 # Folder
-vendor
-.idea
+/vendor
+/src/tests/results
+/.idea
 
 # Compiled source #
 ###################
@@ -36,6 +37,7 @@ vendor
 .DS_Store
 .DS_Store?
 ._*
+.*.sw?
 .Spotlight-V100
 .Trashes
 ehthumbs.db
