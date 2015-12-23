@@ -14,6 +14,7 @@ class Compiler
     protected $terse        = false;
     protected $withinCase   = false;
     protected $indents      = 0;
+    protected $mixins       = array();
 
     protected $doctypes = array(
         '5'             => '<!DOCTYPE html>',
@@ -670,22 +671,26 @@ class Compiler
             $this->buffer($code);
 
         } else {
-            if ($arguments === null || empty($arguments)) {
-                $arguments = array();
-            } else
-            if (!is_array($arguments)) {
-                $arguments = array($arguments);
+            if(!in_array($name, $this->mixins)) {
+                $this->mixins[] = $name;
+
+                if ($arguments === null || empty($arguments)) {
+                    $arguments = array();
+                } else
+                if (!is_array($arguments)) {
+                    $arguments = array($arguments);
+                }
+
+                //TODO: assign nulls to all varargs for remove php warnings
+                array_unshift($arguments, 'attributes');
+                $code = $this->createCode("function {$name} (%s) {", implode(',',$arguments));
+
+                $this->buffer($code);
+                $this->indents++;
+                $this->visit($block);
+                $this->indents--;
+                $this->buffer($this->createCode('}'));
             }
-
-            //TODO: assign nulls to all varargs for remove php warnings
-            array_unshift($arguments, 'attributes');
-            $code = $this->createCode("function {$name} (%s) {", implode(',',$arguments));
-
-            $this->buffer($code);
-            $this->indents++;
-            $this->visit($block);
-            $this->indents--;
-            $this->buffer($this->createCode('}'));
         }
     }
 
