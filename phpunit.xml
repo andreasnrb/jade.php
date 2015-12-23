@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<phpunit
-        colors="true"
-        bootstrap="bootstrap.php">
-
-    <testsuites>
-        <testsuite name="Phaded tests">
-            <directory>./src/Tests</directory>
-        </testsuite>
-    </testsuites>
+<phpunit colors="true" bootstrap="bootstrap.php">
+  <testsuites>
+    <testsuite name="Jade tests">
+      <directory>./src/tests</directory>
+    </testsuite>
+  </testsuites>
 </phpunit>

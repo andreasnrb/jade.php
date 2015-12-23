@@ -13,7 +13,7 @@ abstract class TestBase extends PHPUnit_Framework_TestCase {
     private $assets = '';
     protected function setUp() {
         $this->assets = dirname(__FILE__) . '/assets';
-        $this->jade = new Jade(true);
+        $this->jade = new Jade(null, true);
     }
 
     /**
@@ -31,7 +31,7 @@ abstract class TestBase extends PHPUnit_Framework_TestCase {
      */
     protected function jadeFile($test_method) {
         $filename = implode('.', explode('_', substr($test_method,4)));
-        return file_get_contents($this->assets . strtolower("/$filename.jade"));
+        return $this->assets . '/' . strtolower($filename) . '.jade';
     }
 
     /**
@@ -44,11 +44,12 @@ abstract class TestBase extends PHPUnit_Framework_TestCase {
         $results_dir = dirname(__FILE__) . '/results/';
         if (!file_exists($results_dir))
             mkdir($results_dir);
-        file_put_contents($results_dir. $test_method .".php", $content);
+        $result_file = $results_dir. $test_method .".php";
+        file_put_contents($result_file, $content);
         ob_start();
         clearstatcache();
         extract($scope);
-        eval("?>" . $content);
+        require $result_file;
         $rendered = ob_get_contents();
         ob_end_clean();
         return $rendered;
